@@ -49,7 +49,7 @@
     <param name="stop_after_unblock" value="false" />
     <param name="lower_unlock_on_last_point" value="true" />
     <param name="lower_last_point_tolerance" value="0.60" />
-    <param name="use_external_box_counts" value="true" />
+    <param name="use_external_box_counts" value="false" />
     <!-- Route points from RViz /clicked_point (map frame) -->
     <rosparam param="lower_waypoints">[
       [-20.090410232543945, -7.669590950012207, 0.0],
@@ -63,9 +63,9 @@
       [-0.8398723602294922, -8.678493595123291, 2.355],
       [-8.5911102294921875, -9.0, 0.785],
       [-11.7247953414917, -9., 2.355],
-      [-14.805927276611328, -9.293010711669922, -1.57]
+      [-14.805927276611328, -9.0,-1.57]
     ]</rosparam>
-    <rosparam param="exit_goal">[-14.805927276611328, -9.293010711669922, 1.57]</rosparam>
+    <rosparam param="exit_goal">[-14.805927276611328, -9.293010711669922, -1.57]</rosparam>
     <rosparam param="ramp_waypoints">[
       [-14.84, -11.55, 0.0],
       [2.0, -11.55, 0.0],

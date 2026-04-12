@@ -23,5 +23,22 @@ rostopic pub -1 /rviz_panel/respawn_objects std_msgs/Int16 "data: 1"
 ```bash
 cd ~/ME5413_Final_Project
 source devel/setup.bash
-roslaunch me5413_world navigationtest.launch enable_mission_manager:=false use_teb:=false
-```
+roslaunch me5413_world navigation.launch use_teb:=true
+'''
+
+rostopic echo /clicked_point
+rostopic echo /rosout | grep --line-buffered -E "STATE_ENTER|STATE_EXIT|NAV_GOAL|UNBLOCK_SENT|NAV_FAIL|NAV_RETRY|FINAL_DECISION|DOOR_DIGIT|TARGET_DOOR"
+
+
+cd ~/ME5413_Final_Project
+source devel/setup.bash
+rostopic echo /rosout | grep --line-buffered -E "COUNT_UPDATE|TARGET_DIGIT_DECIDED"
+
+cd ~/ME5413_Final_Project
+source devel/setup.bash
+rostopic echo /least_frequent_digit
+
+killall -9 roscore
+killall -9 rosmaster
+killall -9 gzserver
+killall -9 gzclient

@@ -354,7 +354,7 @@ void ObjectSpawner::openBridgeCallback(const std_msgs::Bool::ConstPtr& open_brid
       bridge_open_called_ = true;
       deleteCone();
       ROS_INFO_STREAM("Cone will be opened for 10s");
-      common::Time::Sleep(10);
+      common::Time::Sleep(20);
       spawnCone();
       ROS_INFO_STREAM("Cone is now placed back, cannot be removed again");
     }

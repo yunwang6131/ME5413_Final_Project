@@ -123,6 +123,10 @@ class MissionManager:
         self.nearest_box_digit = ""
         self.last_nearest_box_digit_time = None
         self.verify_wait = float(rospy.get_param("~verify_wait", 2.0))
+
+        self.target_digit = None
+        self.latest_least_digit = None
+        self.last_least_digit_time = None
         
 
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
@@ -137,6 +141,7 @@ class MissionManager:
         rospy.Subscriber("/move_base/status", GoalStatusArray, self.status_cb, queue_size=1)
         rospy.Subscriber("/mission/box_counts", Int32MultiArray, self.box_counts_cb, queue_size=1)
         rospy.Subscriber("/digit_on_nearest_box", String, self.nearest_box_digit_cb, queue_size=1)
+        rospy.Subscriber("/least_frequent_digit", String, self.least_digit_cb, queue_size=1)
 
         self.timer = rospy.Timer(rospy.Duration(1.0 / self.tick_hz), self.tick)
         rospy.loginfo("STATE_ENTER %s t=%.2f reason=boot", self.state, self.elapsed())
@@ -144,6 +149,13 @@ class MissionManager:
     def nearest_box_digit_cb(self, msg):
         self.nearest_box_digit = (msg.data or "").strip()
         self.last_nearest_box_digit_time = rospy.Time.now()
+
+
+    def least_digit_cb(self, msg):
+        s = (msg.data or "").strip()
+        if len(s) == 1 and s.isdigit():
+            self.latest_least_digit = int(s)
+            self.last_least_digit_time = rospy.Time.now()
 
     def _parse_final_goals(self, goals_raw):
         parsed = {}
@@ -435,7 +447,17 @@ class MissionManager:
                 )
 
             if done or last_point_reached:
-                self.target_digit = self.choose_final_box()
+                if self.latest_least_digit is None:
+                    rospy.logwarn("No /least_frequent_digit received yet; stay in SCAN_LOWER")
+                    return
+
+                self.target_digit = self.latest_least_digit
+                self.counting_enabled = False
+
+                rospy.loginfo(
+                    "TARGET_DIGIT_DECIDED digit=%d",
+                    self.target_digit,
+                )
                 self.counting_enabled = False
 
                 rospy.loginfo(
@@ -529,7 +551,11 @@ class MissionManager:
         if self.state == "VERIFY_DOOR_DIGIT":
             verify_dt = (rospy.Time.now() - self.state_enter_time).to_sec()
             target_digit_str = str(self.target_digit)
-            seen_digit = self.nearest_box_digit
+            seen_digit = ""
+            if self.last_nearest_box_digit_time is not None:
+                age = (rospy.Time.now() - self.last_nearest_box_digit_time).to_sec()
+                if age < 1.0:
+                    seen_digit = self.nearest_box_digit
 
             if seen_digit == target_digit_str:
                 rospy.loginfo(
