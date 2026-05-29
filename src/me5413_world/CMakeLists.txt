@@ -49,5 +49,6 @@ target_link_libraries(object_spawner_gz_plugin ${catkin_LIBRARIES} ${GAZEBO_LIBR
 catkin_install_python(PROGRAMS
   scripts/box_mapper.py
   scripts/mission_manager.py
+  scripts/detector_for_red_cylinder.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

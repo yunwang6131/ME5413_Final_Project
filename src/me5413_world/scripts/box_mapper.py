@@ -31,30 +31,32 @@ def _ocr_digit_psm10_conf(roi_bin):
     cfg = r"--oem 3 --psm 10 -c tessedit_char_whitelist=0123456789"
     try:
         data = pytesseract.image_to_data(
-            roi_bin, config=cfg, output_type=pytesseract.Output.DICT
+            roi_bin, config=cfg, output_type=pytesseract.Output.DICT #Tesseract 对图像做 OCR;output_type=DICT 表示返回 Python 字典；image_to_data 会返回更详细的信息，不只是文字，还包括每个识别块的置信度
         )
-    except pytesseract.TesseractError:
+    except pytesseract.TesseractError: #如果 OCR 调用失败，直接返回
         return None, -1
 
-    best_d, best_c = None, -1
-    for i in range(len(data.get("text", []))):
-        raw = (data["text"][i] or "").strip()
-        if len(raw) != 1 or not raw.isdigit():
+    best_d, best_c = None, -1 #初始化最佳数字和置信度为 None 和 -1
+    for i in range(len(data.get("text", []))): #遍历 OCR 结果中的每个字符
+        raw = (data["text"][i] or "").strip() #取出第 i 个识别文本，如果为空就变成空字符串，strip()去掉字符串开头和结尾
+        if len(raw) != 1 or not raw.isdigit(): #如果文本长度不为 1 或者不是数字，就跳过
             continue
         try:
-            c = int(float(data["conf"][i]))
+            c = int(float(data["conf"][i])) #将置信度转换为整数
         except (ValueError, IndexError, TypeError):
             continue
-        if c > best_c:
+        if c > best_c: #如果当前置信度大于最佳置信度，就更新最佳置信度和最佳数字
             best_c, best_d = c, raw
-    return best_d, best_c
+    return best_d, best_c #返回最佳数字和最佳置信度 
 
 
 def _bbox_area(r):
-    return r[2] * r[3]
+    """计算矩形框的面积，输入矩形 r=(x,y,w,h)，返回 w*h"""
+    return r[2] * r[3] 
 
 
 def _fully_covers(outer, inner):
+    """判断外框是否完全覆盖内框,返回的是true和false"""
     ox, oy, ow, oh = outer
     ix, iy, iw, ih = inner
     return (
@@ -66,13 +68,14 @@ def _fully_covers(outer, inner):
 
 
 def _remove_larger_when_fully_covers(candidates):
+    """输入一批候选数字框，如果一个大框完全包住一个更小的框，就删掉大框，保留更紧致的小框。"""
     n = len(candidates)
     if n <= 1:
-        return candidates
+        return candidates #如果候选框数量小于等于1，直接返回
 
-    remove = set()
-    for i in range(n):
-        for j in range(n):
+    remove = set() #记录要删除的候选框下标
+    for i in range(n): #双重循环，两两比较所有框
+        for j in range(n): 
             if i == j or i in remove or j in remove:
                 continue
 
@@ -144,6 +147,10 @@ class BoxMapperFusion:
         self.z_threshold = rospy.get_param("~z_threshold", 0.1)
         self.map_tolerance = rospy.get_param("~map_tolerance", 1)
 
+        # 最小改动：新增两个参数，只用于聚类后按离墙距离过滤整簇
+        self.wall_clearance = rospy.get_param("~wall_clearance", 0.45)
+        self.occ_threshold = rospy.get_param("~occ_threshold", 50)
+
         # =========================
         # Fusion / tracking params
         # =========================
@@ -156,6 +163,7 @@ class BoxMapperFusion:
         self.min_digit_vote_weight = rospy.get_param("~min_digit_vote_weight", 2.0)
         self.min_digit_margin = rospy.get_param("~min_digit_margin", 0.8)
         self.max_visual_assign_dist = rospy.get_param("~max_visual_assign_dist", 12.0)
+        self.min_consecutive_digit_hits = rospy.get_param("~min_consecutive_digit_hits", 4)
 
         # 箱子实际尺寸（边长，单位 m）
         self.box_size = rospy.get_param("~box_size", 0.8)
@@ -287,7 +295,6 @@ class BoxMapperFusion:
         self.update_lidar_tracks(centroids)
         self._publish_outputs()
 
-
     def publish_box_counts(self):
         confirmed_boxes = [b for b in self.lidar_boxes if b["status"] == "confirmed"]
         stable_digits = [b["best_digit"] for b in confirmed_boxes if b["best_digit"] in ["1", "2", "3", "4"]]
@@ -348,8 +355,28 @@ class BoxMapperFusion:
         for label in set(labels):
             if label == -1:
                 continue
+
             cluster_pts = X[labels == label]
             centroid = np.mean(cluster_pts, axis=0)
+
+            # 最小改动：聚类后，如果整簇中心离墙太近，则丢弃该簇
+            mx = int((centroid[0] - self.map_info.origin.position.x) / self.map_info.resolution)
+            my = int((centroid[1] - self.map_info.origin.position.y) / self.map_info.resolution)
+
+            if not (0 <= mx < self.map_info.width and 0 <= my < self.map_info.height):
+                continue
+
+            clearance_cells = int(self.wall_clearance / self.map_info.resolution)
+            x0 = max(0, mx - clearance_cells)
+            x1 = min(self.map_info.width, mx + clearance_cells + 1)
+            y0 = max(0, my - clearance_cells)
+            y1 = min(self.map_info.height, my + clearance_cells + 1)
+
+            local_region = self.static_map[y0:y1, x0:x1]
+
+            if np.any(local_region >= self.occ_threshold):
+                continue
+
             centroids.append((centroid[0], centroid[1]))
 
         return centroids
@@ -406,7 +433,9 @@ class BoxMapperFusion:
                     "best_digit": "?",
                     "best_digit_score": 0.0,
                     "best_conf": -1,
-                    "last_dist": -1.0
+                    "last_dist": -1.0,
+                    "last_seen_digit": None,
+                    "consecutive_digit_hits": 0
                 })
                 self.next_box_id += 1
 
@@ -417,9 +446,17 @@ class BoxMapperFusion:
         kept = []
         for b in self.lidar_boxes:
             if b["status"] == "confirmed":
+                if "last_seen_digit" not in b:
+                    b["last_seen_digit"] = None
+                if "consecutive_digit_hits" not in b:
+                    b["consecutive_digit_hits"] = 0
                 kept.append(b)
             else:
                 if b["miss_count"] <= self.max_miss_frames:
+                    if "last_seen_digit" not in b:
+                        b["last_seen_digit"] = None
+                    if "consecutive_digit_hits" not in b:
+                        b["consecutive_digit_hits"] = 0
                     kept.append(b)
         self.lidar_boxes = kept
 
@@ -461,6 +498,21 @@ class BoxMapperFusion:
             a["last_dist"] = b["last_dist"]
         elif b["last_dist"] >= 0:
             a["last_dist"] = min(a["last_dist"], b["last_dist"])
+
+        a_last_digit = a.get("last_seen_digit")
+        b_last_digit = b.get("last_seen_digit")
+        a_hits = a.get("consecutive_digit_hits", 0)
+        b_hits = b.get("consecutive_digit_hits", 0)
+
+        if a_last_digit == b_last_digit:
+            a["last_seen_digit"] = a_last_digit
+            a["consecutive_digit_hits"] = max(a_hits, b_hits)
+        elif a_hits >= b_hits:
+            a["last_seen_digit"] = a_last_digit
+            a["consecutive_digit_hits"] = a_hits
+        else:
+            a["last_seen_digit"] = b_last_digit
+            a["consecutive_digit_hits"] = b_hits
 
         self.update_box_best_digit(a)
 
@@ -732,6 +784,15 @@ class BoxMapperFusion:
         if best_box is None:
             return
 
+        if best_box.get("last_seen_digit") == digit:
+            best_box["consecutive_digit_hits"] += 1
+        else:
+            best_box["last_seen_digit"] = digit
+            best_box["consecutive_digit_hits"] = 1
+
+        if best_box["consecutive_digit_hits"] < self.min_consecutive_digit_hits:
+            return
+
         weight = max(0.0, min(1.0, conf / 100.0))
         distance_factor = 1.0 / (1.0 + 0.08 * max(0.0, dist - 2.0))
         final_weight = weight * distance_factor
@@ -935,8 +996,12 @@ class BoxMapperFusion:
             else:
                 state_text = "kept"
 
-            t.text = "Box {} | {} | Num {} | score[{}]".format(
-                box["id"], state_text, box["best_digit"], score_text
+            t.text = "Box {} | {} | Num {} | score[{}] | hit {}".format(
+                box["id"],
+                state_text,
+                box["best_digit"],
+                score_text,
+                box.get("consecutive_digit_hits", 0)
             )
             arr.markers.append(t)
             idx += 1

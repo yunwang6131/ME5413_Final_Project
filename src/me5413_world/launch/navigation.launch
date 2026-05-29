@@ -41,7 +41,7 @@
         type="mission_manager.py"
         output="screen">
     <param name="goal_tolerance" value="0.45" />
-    <param name="goal_timeout" value="60.0" />
+    <param name="goal_timeout" value="140.0" />
     <param name="max_retries" value="2" />
     <param name="tick_hz" value="2.0" />
     <param name="init_wait" value="2.0" />
@@ -49,7 +49,6 @@
     <param name="stop_after_unblock" value="false" />
     <param name="lower_unlock_on_last_point" value="true" />
     <param name="lower_last_point_tolerance" value="0.60" />
-    <param name="use_external_box_counts" value="false" />
     <!-- Route points from RViz /clicked_point (map frame) -->
     <rosparam param="lower_waypoints">[
       [-20.090410232543945, -7.669590950012207, 0.0],
@@ -62,17 +61,17 @@
       [-0.9517345428466797, -0.4745903015136719, 3.14],
       [-0.8398723602294922, -8.678493595123291, 2.355],
       [-8.5911102294921875, -9.0, 0.785],
-      [-11.7247953414917, -9., 2.355],
-      [-14.805927276611328, -9.0,-1.57]
+      [-11.7247953414917, -9.0, 2.355],
+      [-14.805927276611328, -9.293010711669922, -1.57]
     ]</rosparam>
-    <rosparam param="exit_goal">[-14.805927276611328, -9.293010711669922, -1.57]</rosparam>
+    <rosparam param="exit_goal">[-14.805927276611328, -11.55, -1.57]</rosparam>
     <rosparam param="ramp_waypoints">[
       [-14.84, -11.55, 0.0],
       [2.0, -11.55, 0.0],
       [18.3, -11.55, 0.0],
       [18.9, -11.55, 0.0]
     ]</rosparam>
-    <rosparam param="upper_waypoints">[
+    <!-- <rosparam param="upper_waypoints">[
       [13.0, 0.0, 3.14],
       [9, 0.0, 3.14],
       [9.0, -7.59, 3.14],
@@ -83,22 +82,24 @@
       [7.5, 2.57, 3.14],
       [9.0, 7.75, 3.14],
       [7.5, 7.75, 3.14]
-    ]</rosparam>
+    ]</rosparam> -->
     <rosparam param="door_observation_goals">[
       [1, 7.5, -7.59, 3.14],
-      [2, 7.5, -2.47, 3.14],
+      [2, 7.5, -2.30, 3.14],
       [3, 7.5,  2.57, 3.14],
       [4, 7.5,  7.75, 3.14]
     ]</rosparam>
 
     <rosparam param="door_entry_goals">[
-      [1, 9.0, -7.59, 3.14],
-      [2, 9.0, -2.47, 3.14],
-      [3, 9.0,  2.57, 3.14],
-      [4, 9.0,  7.75, 3.14]
+      [1, 3.4, -7.59, 3.14],
+      [2, 3.4, -2.47, 3.14],
+      [3, 3.4,  2.57, 3.14],
+      [4, 3.4,  7.75, 3.14]
     ]</rosparam>
 
-    <param name="verify_wait" value="2.0" />
+    <param name="min_observe_wait" value="8.0" />
+    <param name="max_observe_wait" value="40.0" />
+    <param name="red_wait_timeout" value="20.0" />
   </node>
 <node pkg="me5413_world"
       type="box_mapper.py"
@@ -124,5 +125,9 @@
       type="box_detector_node.py"
       name="box_detector_node"
       output="screen" />
-      
+
+<node pkg="me5413_world"
+      type="detector_for_red_cylinder.py"
+      name="red_color_detector_node"
+      output="screen" />     
 </launch>
